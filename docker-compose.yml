@@ -1,0 +1,93 @@
+version: '3'
+
+networks:
+  mysql-net1:
+    ipam:
+      config:
+        - subnet: 172.16.0.0/16
+          gateway: 172.16.0.1
+
+services:
+
+  mysql8_master:
+    image: mysql:8.3.0
+    container_name: mysql8_master
+    ports:
+      - "13306:3306"
+    environment:
+      - TZ="Asia/Shanghai"
+      - MYSQL_ROOT_USER=root
+      - MYSQL_ROOT_PASSWORD=root123456
+
+      - MYSQL_DATABASE=test_db
+      - MYSQL_USER=test
+      - MYSQL_PASSWORD=test_123456
+
+      - MASTER_SYNC_USER=sync_user
+      - MASTER_SYNC_PASSWORD=uz5j1f05Tn5u7DCHi1uE6BXci3LB9HmF
+    volumes:
+      - $PWD/mysql8_master/data/:/var/lib/mysql/
+      - $PWD/mysql8_master/conf/:/etc/mysql/conf.d/
+      - $PWD/mysql8_master/init/:/docker-entrypoint-initdb.d/
+      - /etc/localtime:/etc/localtime:ro
+    command:
+      --binlog-ignore-db=information_schema,mysql,sys,performance_schema
+      --default-authentication-plugin=caching_sha2_password
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_0900_ai_ci
+      --explicit-defaults-for-timestamp=true
+      --lower-case-table-names=1
+      --log-bin=mysql-bin
+      --server-id=1
+    restart: always
+    networks:
+      mysql-net1:
+        ipv4_address: 172.16.0.6
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+
+
+  mysql8_slave:
+    image: mysql:8.3.0
+    container_name: mysql8_slave
+    ports:
+      - "23306:3306"
+    environment:
+      - TZ="Asia/Shanghai"
+      - MYSQL_ROOT_USER=root
+      - MYSQL_ROOT_PASSWORD=root123456
+
+      - MYSQL_DATABASE=test_db
+      - MYSQL_USER=test
+      - MYSQL_PASSWORD=test_123456
+
+      - MASTER_SYNC_USER=sync_user
+      - MASTER_SYNC_PASSWORD=uz5j1f05Tn5u7DCHi1uE6BXci3LB9HmF
+      - MASTER_HOST=mysql8_master
+      - MASTER_PORT=3306
+    volumes:
+      - $PWD/mysql8_slave/data/:/var/lib/mysql/
+      - $PWD/mysql8_slave/conf/:/etc/mysql/conf.d/
+      - $PWD/mysql8_slave/init/:/docker-entrypoint-initdb.d/
+      - /etc/localtime:/etc/localtime:ro
+    command:
+      --binlog-ignore-db=information_schema,mysql,sys,performance_schema
+      --default-authentication-plugin=caching_sha2_password
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_0900_ai_ci
+      --explicit-defaults-for-timestamp=true
+      --lower-case-table-names=1
+      --log-bin=mysql-bin
+      --server-id=2
+    restart: always
+    depends_on:
+      - mysql8_master
+    networks:
+      mysql-net1:
+        ipv4_address: 172.16.0.8
+    deploy:
+      resources:
+        limits:
+          memory: 1g
