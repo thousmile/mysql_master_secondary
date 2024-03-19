@@ -1,69 +1,48 @@
-vim [master.sh](mysql8_master/init/master.sh)
-
 ```shell
-#!/bin/bash
 
-MASTER_SYNC_USER=${MASTER_SYNC_USER:-sync_admin}
-MASTER_SYNC_PASSWORD=${MASTER_SYNC_PASSWORD:-sync_admin123456}
-MYSQL_ROOT_USER=${MYSQL_ROOT_USER:-root}
-ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin123456}
-ALLOW_HOST=${ALLOW_HOST:-%}
+mkdir $PWD/mysql8_master/{conf,data} && mkdir $PWD/mysql8_slave1/{conf,data} && mkdir $PWD/mysql8_slave2/{conf,data} && mkdir $PWD/proxysql/data
 
-CREATE_USER_SQL="CREATE USER '$MASTER_SYNC_USER'@'$ALLOW_HOST' IDENTIFIED BY '$MASTER_SYNC_PASSWORD';"
-GRANT_PRIVILEGES_SQL="GRANT REPLICATION SLAVE,REPLICATION CLIENT ON *.* TO '$MASTER_SYNC_USER'@'$ALLOW_HOST';"
-FLUSH_PRIVILEGES_SQL="FLUSH PRIVILEGES;"
-
-mysql -u"$MYSQL_ROOT_USER" -p"$ADMIN_PASSWORD" -e "$CREATE_USER_SQL"
-mysql -u"$MYSQL_ROOT_USER" -p"$ADMIN_PASSWORD" -e "$GRANT_PRIVILEGES_SQL"
-mysql -u"$MYSQL_ROOT_USER" -p"$ADMIN_PASSWORD" -e "$FLUSH_PRIVILEGES_SQL"
-```
-
-vim [slave.sh](mysql8_slave/init/slave.sh)
-```shell
-#!/bin/bash
-
-SLAVE_SYNC_USER="${MASTER_SYNC_USER:-sync_admin}"
-SLAVE_SYNC_PASSWORD="${MASTER_SYNC_PASSWORD:-sync_admin123456}"
-MYSQL_ROOT_USER="${MYSQL_ROOT_USER:-root}"
-ADMIN_PASSWORD="${ADMIN_PASSWORD:-admin123456}"
-MASTER_HOST="${MASTER_HOST:-%}"
-MASTER_PORT="${MASTER_PORT:-%}"
-
-sleep 10
-
-RESULT=`mysql -h$MASTER_HOST -p$MASTER_PORT -u"$SLAVE_SYNC_USER" -p"$SLAVE_SYNC_PASSWORD" -e "SHOW MASTER STATUS;" | grep -v grep |tail -n +2| awk '{print $1,$2}'`
-LOG_FILE_NAME=`echo $RESULT | grep -v grep | awk '{print $1}'`
-LOG_FILE_POS=`echo $RESULT | grep -v grep | awk '{print $2}'`
-
-SYNC_SQL="change master to master_host='$MASTER_HOST', master_port=$MASTER_PORT, master_user='$SLAVE_SYNC_USER',master_password='$SLAVE_SYNC_PASSWORD',master_log_file='$LOG_FILE_NAME',master_log_pos=$LOG_FILE_POS;"
-START_SYNC_SQL="start slave;"
-STATUS_SQL="show slave status\G;"
-
-mysql -u"$MYSQL_ROOT_USER" -p"$ADMIN_PASSWORD" -e "$SYNC_SQL"
-mysql -u"$MYSQL_ROOT_USER" -p"$ADMIN_PASSWORD" -e "$START_SYNC_SQL"
-mysql -u"$MYSQL_ROOT_USER" -p"$ADMIN_PASSWORD" -e "$STATUS_SQL"
-```
-
-
-```shell
+chmod 777 -R *
 
 docker compose up -d
+
+docker exec -it proxysql /bin/bash
+
+mysql -u admin -padmin -h 127.0.0.1 -P6032 --prompt='Admin>'
 
 ```
 
 ```sql
-SELECT `Host`,`User` FROM mysql.`user`
 
+SET mysql-eventslog_filename='queries.log';
 
-SHOW MASTER STATUS;
+INSERT INTO mysql_servers (hostgroup_id, hostname, PORT, COMMENT)
+VALUES (10, 'mysql8_master', 3306, "mysql8_master"),
+       (20, 'mysql8_slave1', 3306, "mysql8_slave1"),
+       (20, 'mysql8_slave2', 3306, "mysql8_slave2");
 
+INSERT INTO mysql_users (username, PASSWORD, default_hostgroup, transaction_persistent)
+VALUES ('proxysql', 'proxysql_123456', 10, 1),
+       ('test', 'test_123456', 10, 1);
 
-SHOW SLAVE STATUS;
+set mysql-monitor_username='proxysql_monitor';
+set mysql-monitor_password='proxysql_monitor_123456';
 
+INSERT INTO mysql_query_rules ( rule_id, active, match_pattern, destination_hostgroup, apply )
+VALUES
+    ( 1, 1, '^select.*for update$', 10, 1 ),
+    ( 2, 1, '^select', 20, 1 );
 
-SHOW VARIABLES;
+load mysql users to runtime;
+load mysql servers to runtime;
+load mysql query rules to runtime;
+load mysql variables to runtime;
+load admin variables to runtime;
 
-
-SHOW VARIABLES LIKE '%collation%';
+save mysql users to disk;
+save mysql servers to disk;
+save mysql query rules to disk;
+save mysql variables to disk;
+save admin variables to disk;
 
 ```
