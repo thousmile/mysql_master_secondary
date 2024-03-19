@@ -4,24 +4,29 @@ networks:
   mysql-net1:
     ipam:
       config:
-        - subnet: 172.16.0.0/16
-          gateway: 172.16.0.1
+        - subnet: 172.18.0.0/16
+          gateway: 172.18.0.1
+
 
 services:
 
   mysql8_master:
-    image: mysql:8.3.0
+    image: mysql:8.0.36-debian
     container_name: mysql8_master
     ports:
       - "13306:3306"
     environment:
-      - TZ="Asia/Shanghai"
       - MYSQL_ROOT_USER=root
       - MYSQL_ROOT_PASSWORD=root123456
 
       - MYSQL_DATABASE=test_db
       - MYSQL_USER=test
       - MYSQL_PASSWORD=test_123456
+
+      - PROXYSQL_USER=proxysql
+      - PROXYSQL_PASSWORD=proxysql_123456
+      - PROXYSQL_MONITOR_USER=proxysql_monitor
+      - PROXYSQL_MONITOR_PASSWORD=proxysql_monitor_123456
 
       - MASTER_SYNC_USER=sync_user
       - MASTER_SYNC_PASSWORD=uz5j1f05Tn5u7DCHi1uE6BXci3LB9HmF
@@ -42,20 +47,19 @@ services:
     restart: always
     networks:
       mysql-net1:
-        ipv4_address: 172.16.0.6
+        ipv4_address: 172.18.0.6
     deploy:
       resources:
         limits:
           memory: 1g
 
 
-  mysql8_slave:
-    image: mysql:8.3.0
-    container_name: mysql8_slave
+  mysql8_slave1:
+    image: mysql:8.0.36-debian
+    container_name: mysql8_slave1
     ports:
       - "23306:3306"
     environment:
-      - TZ="Asia/Shanghai"
       - MYSQL_ROOT_USER=root
       - MYSQL_ROOT_PASSWORD=root123456
 
@@ -63,14 +67,19 @@ services:
       - MYSQL_USER=test
       - MYSQL_PASSWORD=test_123456
 
+      - PROXYSQL_USER=proxysql
+      - PROXYSQL_PASSWORD=proxysql_123456
+      - PROXYSQL_MONITOR_USER=proxysql_monitor
+      - PROXYSQL_MONITOR_PASSWORD=proxysql_monitor_123456
+
       - MASTER_SYNC_USER=sync_user
       - MASTER_SYNC_PASSWORD=uz5j1f05Tn5u7DCHi1uE6BXci3LB9HmF
       - MASTER_HOST=mysql8_master
       - MASTER_PORT=3306
     volumes:
-      - $PWD/mysql8_slave/data/:/var/lib/mysql/
-      - $PWD/mysql8_slave/conf/:/etc/mysql/conf.d/
-      - $PWD/mysql8_slave/init/:/docker-entrypoint-initdb.d/
+      - $PWD/mysql8_slave1/data/:/var/lib/mysql/
+      - $PWD/mysql8_slave1/conf/:/etc/mysql/conf.d/
+      - $PWD/mysql8_slave1/init/:/docker-entrypoint-initdb.d/
       - /etc/localtime:/etc/localtime:ro
     command:
       --binlog-ignore-db=information_schema,mysql,sys,performance_schema
@@ -84,10 +93,88 @@ services:
     restart: always
     depends_on:
       - mysql8_master
+    extra_hosts:
+      - mysql8_master:172.18.0.6
     networks:
       mysql-net1:
-        ipv4_address: 172.16.0.8
+        ipv4_address: 172.18.0.7
     deploy:
       resources:
         limits:
           memory: 1g
+
+
+  mysql8_slave2:
+    image: mysql:8.0.36-debian
+    container_name: mysql8_slave2
+    ports:
+      - "33306:3306"
+    environment:
+      - MYSQL_ROOT_USER=root
+      - MYSQL_ROOT_PASSWORD=root123456
+
+      - MYSQL_DATABASE=test_db
+      - MYSQL_USER=test
+      - MYSQL_PASSWORD=test_123456
+
+      - PROXYSQL_USER=proxysql
+      - PROXYSQL_PASSWORD=proxysql_123456
+      - PROXYSQL_MONITOR_USER=proxysql_monitor
+      - PROXYSQL_MONITOR_PASSWORD=proxysql_monitor_123456
+
+      - MASTER_SYNC_USER=sync_user
+      - MASTER_SYNC_PASSWORD=uz5j1f05Tn5u7DCHi1uE6BXci3LB9HmF
+      - MASTER_HOST=mysql8_master
+      - MASTER_PORT=3306
+    volumes:
+      - $PWD/mysql8_slave2/data/:/var/lib/mysql/
+      - $PWD/mysql8_slave2/conf/:/etc/mysql/conf.d/
+      - $PWD/mysql8_slave2/init/:/docker-entrypoint-initdb.d/
+      - /etc/localtime:/etc/localtime:ro
+    command:
+      --binlog-ignore-db=information_schema,mysql,sys,performance_schema
+      --default-authentication-plugin=caching_sha2_password
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_0900_ai_ci
+      --explicit-defaults-for-timestamp=true
+      --lower-case-table-names=1
+      --log-bin=mysql-bin
+      --server-id=3
+    restart: always
+    depends_on:
+      - mysql8_master
+    extra_hosts:
+      - mysql8_master:172.18.0.6
+    networks:
+      mysql-net1:
+        ipv4_address: 172.18.0.8
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+
+
+  proxysql:
+    image: proxysql/proxysql:2.6.0-debian
+    container_name: proxysql
+    ports:
+      - "6032:6032"
+      - "6033:6033"
+      - "6070:6070"
+    volumes:
+      - $PWD/proxysql/proxysql.cnf:/etc/proxysql.cnf
+      - $PWD/proxysql/data:/var/lib/proxysql
+    restart: always
+    depends_on:
+      - mysql8_master
+    extra_hosts:
+      - mysql8_master:172.18.0.6
+      - mysql8_slave1:172.18.0.7
+      - mysql8_slave2:172.18.0.8
+    networks:
+      mysql-net1:
+        ipv4_address: 172.18.0.10
+    deploy:
+      resources:
+        limits:
+          memory: 256M
