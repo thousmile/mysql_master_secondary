@@ -21,17 +21,28 @@ VALUES (10, 'mysql8_master', 3306, "mysql8_master"),
        (20, 'mysql8_slave1', 3306, "mysql8_slave1"),
        (20, 'mysql8_slave2', 3306, "mysql8_slave2");
 
+select * from mysql_servers\G;
+
+
 INSERT INTO mysql_users (username, PASSWORD, default_hostgroup, transaction_persistent)
-VALUES ('proxysql', 'proxysql_123456', 10, 1),
-       ('test', 'test_123456', 10, 1);
+VALUES ('root', 'root123456', 10, 1),
+       ('test', 'test_123456', 10, 1),
+       ('proxysql', 'proxysql_123456', 10, 1);
+
+select * from mysql_users\G;
+
 
 set mysql-monitor_username='proxysql_monitor';
 set mysql-monitor_password='proxysql_monitor_123456';
+
 
 INSERT INTO mysql_query_rules ( rule_id, active, match_pattern, destination_hostgroup, apply )
 VALUES
     ( 1, 1, '^select.*for update$', 10, 1 ),
     ( 2, 1, '^select', 20, 1 );
+
+select * from mysql_query_rules\G;
+
 
 load mysql users to runtime;
 load mysql servers to runtime;

@@ -89,6 +89,7 @@ services:
       --explicit-defaults-for-timestamp=true
       --lower-case-table-names=1
       --log-bin=mysql-bin
+      --read-only=1
       --server-id=2
     restart: always
     depends_on:
@@ -139,6 +140,7 @@ services:
       --explicit-defaults-for-timestamp=true
       --lower-case-table-names=1
       --log-bin=mysql-bin
+      --read-only=1
       --server-id=3
     restart: always
     depends_on:
